@@ -1,6 +1,6 @@
 import { assert } from "chai";
 import { suite, test } from "mocha";
-import * as Web3 from "web3";
+import Web3 from "web3";
 import { WyvernProtocol } from "wyvern-js";
 import {
   MAINNET_PROVIDER_URL,
@@ -89,8 +89,8 @@ suite("api", () => {
     const paymentTokenAddress = WETH_ADDRESS;
     const extraBountyBasisPoints = 0;
     const expirationTime = Math.round(
-      Date.now() / 1000 + MIN_EXPIRATION_MINUTES * 60
-    ); // fifteen minutes from now
+      Date.now() / 1000 + (MIN_EXPIRATION_MINUTES + 1) * 60
+    ); // sixteen minutes from now
     const englishAuctionReservePrice = 2;
 
     const tokenId = MYTHEREUM_TOKEN_ID.toString();
