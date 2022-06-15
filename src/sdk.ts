@@ -3,7 +3,10 @@ import { CROSS_CHAIN_SEAPORT_ADDRESS } from "@opensea/seaport-js/lib/constants";
 import {
   ConsiderationInputItem,
   CreateInputItem,
+  CreateOrderAction,
+  ExchangeAction,
   OrderComponents,
+  OrderUseCase,
 } from "@opensea/seaport-js/lib/types";
 import { BigNumber } from "bignumber.js";
 import { Web3JsProvider } from "ethereum-types";
@@ -158,6 +161,23 @@ import {
   getAssetItemType,
   BigNumberInput,
 } from "./utils/utils";
+
+const executeAllActions = async <T extends CreateOrderAction | ExchangeAction>(
+  actions: OrderUseCase<T>["actions"]
+) => {
+  for (let i = 0; i < actions.length - 1; i++) {
+    const action = actions[i];
+    if (action.type === "approval") {
+      await action.transactionMethods.transact();
+    }
+  }
+
+  const finalAction = actions[actions.length - 1] as T;
+
+  return finalAction.type === "create"
+    ? await finalAction.createOrder()
+    : await finalAction.transactionMethods.buildTransaction();
+};
 
 export class OpenSeaSDK {
   // Web3 instance to use
@@ -1508,42 +1528,33 @@ export class OpenSeaSDK {
     order: OrderV2;
     accountAddress: string;
     recipientAddress?: string;
-  }): Promise<string> {
+  }): Promise<{ encoded: string; txnData: any }> {
     const isPrivateListing = !!order.taker;
     if (isPrivateListing) {
-      if (recipientAddress) {
-        throw new Error(
-          "Private listings cannot be fulfilled with a recipient address"
-        );
-      }
-      return this.fulfillPrivateOrder({
-        order,
-        accountAddress,
-      });
+      throw new Error("Private listings not supported");
     }
 
-    let transactionHash: string;
+    let transaction: any;
     switch (order.protocolAddress) {
       case CROSS_CHAIN_SEAPORT_ADDRESS: {
-        const { executeAllActions } = await this.seaport.fulfillOrder({
+        const { actions } = await this.seaport.fulfillOrder({
           order: order.protocolData,
           accountAddress,
           recipientAddress,
         });
-        const transaction = await executeAllActions();
-        transactionHash = transaction.hash;
+        transaction = await executeAllActions(actions);
         break;
       }
       default:
         throw new Error("Unsupported protocol");
     }
 
-    await this._confirmTransaction(
-      transactionHash,
-      EventType.MatchOrders,
-      "Fulfilling order"
-    );
-    return transactionHash;
+    return {
+      txnData: {
+        ...transaction,
+      },
+      encoded: transaction.data,
+    };
   }
 
   /**
